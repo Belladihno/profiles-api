@@ -27,7 +27,7 @@ export class Profile {
   gender!: string;
 
   @Column({ type: 'float', nullable: true })
-  gender_probality!: number;
+  gender_probability!: number;
 
   @Column({ nullable: true })
   sample_size!: number;

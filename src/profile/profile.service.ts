@@ -32,7 +32,7 @@ export class ProfilesService {
     if (existing) {
       return {
         status: 'success',
-        message: 'Profile already exists!',
+        message: 'Profile already exists',
         data: existing,
       };
     }
@@ -67,9 +67,9 @@ export class ProfilesService {
       throw new HttpException(
         {
           status: 'error',
-          message: 'Insufficient gender data for this name',
+          message: 'Genderize returned an invalid response',
         },
-        HttpStatus.UNPROCESSABLE_ENTITY,
+        HttpStatus.BAD_GATEWAY,
       );
     }
 
@@ -77,9 +77,9 @@ export class ProfilesService {
       throw new HttpException(
         {
           status: 'error',
-          message: 'Insufficient age data for this name',
+          message: 'Agify returned an invalid response',
         },
-        HttpStatus.UNPROCESSABLE_ENTITY,
+        HttpStatus.BAD_GATEWAY,
       );
     }
 
@@ -87,9 +87,9 @@ export class ProfilesService {
       throw new HttpException(
         {
           status: 'error',
-          message: 'Insufficient nationality data for this name',
+          message: 'Nationalize returned an invalid response',
         },
-        HttpStatus.UNPROCESSABLE_ENTITY,
+        HttpStatus.BAD_GATEWAY,
       );
     }
 
@@ -100,7 +100,7 @@ export class ProfilesService {
     const profile = this.profileRepo.create({
       name,
       gender: genderData.gender,
-      gender_probality: genderData.probability,
+      gender_probability: genderData.probability,
       sample_size: genderData.count,
       age: agifyData.age,
       age_group: this.classifyAgeGroup(agifyData.age),
@@ -110,5 +110,61 @@ export class ProfilesService {
 
     const saved = await this.profileRepo.save(profile);
     return { status: 'success', data: saved };
+  }
+
+  async getProfileById(id: string) {
+    const profile = await this.profileRepo.findOne({ where: { id } });
+    if (!profile) {
+      throw new HttpException(
+        { status: 'error', message: 'Profile not found' },
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    return { status: 'success', data: profile };
+  }
+
+  async getAllProfiles(
+    gender?: string,
+    country_id?: string,
+    age_group?: string,
+  ) {
+    const query = this.profileRepo.createQueryBuilder('p');
+    if (gender) {
+      query.andWhere('LOWER(p.gender) = LOWER(:gender)', { gender });
+    }
+    if (country_id) {
+      query.andWhere('LOWER(p.country_id) = LOWER(:country_id)', {
+        country_id,
+      });
+    }
+    if (age_group) {
+      query.andWhere('LOWER(p.age_group) = LOWER(:age_group)', {
+        age_group,
+      });
+    }
+    const profiles = await query.getMany();
+    return {
+      status: 'success',
+      count: profiles.length,
+      data: profiles.map((p) => ({
+        id: p.id,
+        name: p.name,
+        gender: p.gender,
+        age: p.age,
+        age_group: p.age_group,
+        country_id: p.country_id,
+      })),
+    };
+  }
+
+  async deleteProfile(id: string) {
+    const profile = await this.profileRepo.findOne({ where: { id } });
+    if (!profile) {
+      throw new HttpException(
+        { status: 'error', message: 'Profile not found' },
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    await this.profileRepo.remove(profile);
   }
 }
