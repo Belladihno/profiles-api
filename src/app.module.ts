@@ -11,15 +11,23 @@ import { Profile } from './profile/entities/profile.entity';
     ConfigModule.forRoot({ isGlobal: true }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: (config: ConfigService) => ({
-        type: 'postgres',
-        database: config.get<string>('DATABASE_URL'),
-        ssl: {
-          rejectUnauthorized: false,
-        },
-        entities: [Profile],
-        synchronize: true,
-      }),
+      useFactory: (config: ConfigService) => {
+        const dbUrl = config.get<string>('DATABASE_URL');
+        return {
+          type: 'postgres',
+          url: dbUrl,
+          ssl: {
+            rejectUnauthorized: false,
+          },
+          entities: [Profile],
+          synchronize: true,
+          extra: {
+            ssl: {
+              rejectUnauthorized: false,
+            },
+          },
+        };
+      },
       inject: [ConfigService],
     }),
     ProfilesModule,
