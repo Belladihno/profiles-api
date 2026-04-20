@@ -8,6 +8,7 @@ import {
   GenderizeResponse,
   NationalizeResponse,
 } from './interface/external-api.interface';
+import { GetProfilesDto } from './dto/get-profiles.dto';
 
 @Injectable()
 export class ProfilesService {
@@ -15,6 +16,72 @@ export class ProfilesService {
     @InjectRepository(Profile)
     private readonly profileRepo: Repository<Profile>,
   ) {}
+
+  private countryMap: Map<string, string> | null = null;
+
+  private async getCountryMap(): Promise<Map<string, string>> {
+    if (this.countryMap) return this.countryMap;
+
+    const profiles = await this.profileRepo.find({
+      select: ['country_id', 'country_name'],
+    });
+
+    this.countryMap = new Map();
+    profiles.forEach((p) => this.countryMap!.set(p.country_id, p.country_name));
+    return this.countryMap;
+  }
+
+  private parseQuery(q: string): Partial<GetProfilesDto> {
+    const filters: Partial<GetProfilesDto> = {};
+    const words = q.toLowerCase().split(/\s+/);
+
+    // Gender
+    if (words.includes('male')) filters.gender = 'male';
+    if (words.includes('female')) filters.gender = 'female';
+
+    // Age group
+    if (words.includes('teenagers')) filters.age_group = 'teenager';
+    if (words.includes('adult')) filters.age_group = 'adult';
+    if (words.includes('child')) filters.age_group = 'child';
+    if (words.includes('senior')) filters.age_group = 'senior';
+
+    // Age ranges
+    if (words.includes('young')) {
+      filters.min_age = 16;
+      filters.max_age = 24;
+    }
+    const aboveIndex = words.findIndex((w) => w === 'above');
+    if (aboveIndex !== -1 && words[aboveIndex + 1]) {
+      const age = parseInt(words[aboveIndex + 1]);
+      if (!isNaN(age)) filters.min_age = age;
+    }
+
+    // Country
+    const fromIndex = words.findIndex((w) => w === 'from');
+    if (fromIndex !== -1 && words[fromIndex + 1]) {
+      const countryName = words
+        .slice(fromIndex + 1)
+        .join(' ')
+        .toLowerCase();
+      const countryMapReverse: Record<string, string> = {
+        nigeria: 'NG',
+        kenya: 'KE',
+        angola: 'AO',
+        uganda: 'UG',
+        tanzania: 'TZ',
+        'south africa': 'ZA',
+        ethiopia: 'ET',
+        ghana: 'GH',
+        senegal: 'SN',
+        mali: 'ML',
+        // Add more as needed based on seeded data
+      };
+      const id = countryMapReverse[countryName];
+      if (id) filters.country_id = id;
+    }
+
+    return filters;
+  }
 
   private classifyAgeGroup(age: number): string {
     if (age <= 12) return 'child';
@@ -97,14 +164,15 @@ export class ProfilesService {
       a.probability >= b.probability ? a : b,
     );
 
+    const countryMap = await this.getCountryMap();
     const profile = this.profileRepo.create({
       name,
       gender: genderData.gender,
       gender_probability: genderData.probability,
-      sample_size: genderData.count,
       age: agifyData.age,
       age_group: this.classifyAgeGroup(agifyData.age),
       country_id: topCountry.country_id,
+      country_name: countryMap.get(topCountry.country_id) || 'Unknown',
       country_probability: topCountry.probability,
     });
 
@@ -123,38 +191,87 @@ export class ProfilesService {
     return { status: 'success', data: profile };
   }
 
-  async getAllProfiles(
-    gender?: string,
-    country_id?: string,
-    age_group?: string,
-  ) {
-    const query = this.profileRepo.createQueryBuilder('p');
-    if (gender) {
-      query.andWhere('LOWER(p.gender) = LOWER(:gender)', { gender });
+  async getAllProfiles(query: GetProfilesDto) {
+    const qb = this.profileRepo.createQueryBuilder('p');
+
+    if (query.gender) {
+      qb.andWhere('LOWER(p.gender) = LOWER(:gender)', { gender: query.gender });
     }
-    if (country_id) {
-      query.andWhere('LOWER(p.country_id) = LOWER(:country_id)', {
-        country_id,
+    if (query.age_group) {
+      qb.andWhere('LOWER(p.age_group) = LOWER(:age_group)', {
+        age_group: query.age_group,
       });
     }
-    if (age_group) {
-      query.andWhere('LOWER(p.age_group) = LOWER(:age_group)', {
-        age_group,
+    if (query.country_id) {
+      qb.andWhere('LOWER(p.country_id) = LOWER(:country_id)', {
+        country_id: query.country_id,
       });
     }
-    const profiles = await query.getMany();
+    if (query.min_age !== undefined) {
+      qb.andWhere('p.age >= :min_age', { min_age: query.min_age });
+    }
+    if (query.max_age !== undefined) {
+      qb.andWhere('p.age <= :max_age', { max_age: query.max_age });
+    }
+    if (query.min_gender_probability !== undefined) {
+      qb.andWhere('p.gender_probability >= :min_gender_probability', {
+        min_gender_probability: query.min_gender_probability,
+      });
+    }
+    if (query.min_country_probability !== undefined) {
+      qb.andWhere('p.country_probability >= :min_country_probability', {
+        min_country_probability: query.min_country_probability,
+      });
+    }
+
+    const sortBy = query.sort_by || 'created_at';
+    const order = query.order || 'desc';
+    qb.orderBy(`p.${sortBy}`, order.toUpperCase() as 'ASC' | 'DESC');
+
+    const page = query.page || 1;
+    const limit = query.limit || 10;
+    const offset = (page - 1) * limit;
+
+    qb.skip(offset).take(limit);
+
+    const [profiles, total] = await qb.getManyAndCount();
+
     return {
       status: 'success',
-      count: profiles.length,
+      page,
+      limit,
+      total,
       data: profiles.map((p) => ({
         id: p.id,
         name: p.name,
         gender: p.gender,
+        gender_probability: p.gender_probability,
         age: p.age,
         age_group: p.age_group,
         country_id: p.country_id,
+        country_name: p.country_name,
+        country_probability: p.country_probability,
+        created_at: p.created_at,
       })),
     };
+  }
+
+  async searchProfiles(q: string, page?: number, limit?: number) {
+    const filters = this.parseQuery(q);
+    if (Object.keys(filters).length === 0) {
+      throw new HttpException(
+        { status: 'error', message: 'Unable to interpret query' },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    const dto: GetProfilesDto = {
+      ...filters,
+      sort_by: 'created_at',
+      order: 'desc',
+      page: page || 1,
+      limit: limit || 10,
+    } as GetProfilesDto;
+    return this.getAllProfiles(dto);
   }
 
   async deleteProfile(id: string) {

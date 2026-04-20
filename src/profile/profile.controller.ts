@@ -6,9 +6,12 @@ import {
   Param,
   Delete,
   Query,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { ProfilesService } from './profile.service';
 import { CreateProfileDto } from './dto/create-profile.dto';
+import { GetProfilesDto } from './dto/get-profiles.dto';
 
 @Controller('api/profiles')
 export class ProfilesController {
@@ -20,12 +23,23 @@ export class ProfilesController {
   }
 
   @Get()
-  async findAll(
-    @Query('gender') gender?: string,
-    @Query('country_id') country_id?: string,
-    @Query('age_group') age_group?: string,
+  async findAll(@Query() query: GetProfilesDto) {
+    return this.profilesService.getAllProfiles(query);
+  }
+
+  @Get('search')
+  async search(
+    @Query('q') q: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
   ) {
-    return this.profilesService.getAllProfiles(gender, country_id, age_group);
+    if (!q || q.trim() === '') {
+      throw new HttpException(
+        { status: 'error', message: 'Query parameter q is required' },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    return this.profilesService.searchProfiles(q, page, limit);
   }
 
   @Get(':id')

@@ -3,6 +3,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   PrimaryColumn,
 } from 'typeorm';
 
@@ -24,26 +25,31 @@ export class Profile {
   name!: string;
 
   @Column({ nullable: true })
+  @Index()
   gender!: string;
 
   @Column({ type: 'float', nullable: true })
   gender_probability!: number;
 
   @Column({ nullable: true })
-  sample_size!: number;
+  country_name!: string;
 
   @Column({ nullable: true })
+  @Index()
   age!: number;
 
   @Column({ nullable: true })
+  @Index()
   age_group!: string;
 
   @Column({ nullable: true })
+  @Index()
   country_id!: string;
 
   @Column({ type: 'float', nullable: true })
   country_probability!: number;
 
   @CreateDateColumn({ type: 'timestamptz' })
+  @Index()
   created_at!: Date;
 }

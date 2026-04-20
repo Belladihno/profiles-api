@@ -16,16 +16,16 @@ import { Profile } from './profile/entities/profile.entity';
         return {
           type: 'postgres',
           url: dbUrl,
-          ssl: {
-            rejectUnauthorized: false,
-          },
+          // ssl: {
+          //   rejectUnauthorized: false,
+          // },
           entities: [Profile],
           synchronize: true,
-          extra: {
-            ssl: {
-              rejectUnauthorized: false,
-            },
-          },
+          // extra: {
+          //   ssl: {
+          //     rejectUnauthorized: false,
+          //   },
+          // },
         };
       },
       inject: [ConfigService],
