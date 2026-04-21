@@ -12,7 +12,7 @@ import { Profile } from './profile/entities/profile.entity';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => {
-        const dbUrl = config.get<string>('DATABASE_URL');
+        const dbUrl = config.get<string>('DATABASE_PUBLIC_URL');
         return {
           type: 'postgres',
           url: dbUrl,
