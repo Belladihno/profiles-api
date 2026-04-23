@@ -31,13 +31,31 @@ export class ProfilesService {
     return this.countryMap;
   }
 
-  private parseQuery(q: string): Partial<GetProfilesDto> {
+  private countryMapReverse: Map<string, string> | null = null;
+
+  private async getCountryMapReverse(): Promise<Map<string, string>> {
+    if (this.countryMapReverse) return this.countryMapReverse;
+
+    const profiles = await this.profileRepo.find({
+      select: ['country_id', 'country_name'],
+    });
+
+    this.countryMapReverse = new Map();
+    profiles.forEach((p) =>
+      this.countryMapReverse!.set(p.country_name.toLowerCase(), p.country_id),
+    );
+    return this.countryMapReverse;
+  }
+
+  private async parseQuery(q: string): Promise<Partial<GetProfilesDto>> {
     const filters: Partial<GetProfilesDto> = {};
     const words = q.toLowerCase().split(/\s+/);
 
     // Gender
-    if (words.includes('male')) filters.gender = 'male';
-    if (words.includes('female')) filters.gender = 'female';
+    if (words.includes('male') || words.includes('males'))
+      filters.gender = 'male';
+    if (words.includes('female') || words.includes('females'))
+      filters.gender = 'female';
 
     // Age group
     if (words.includes('teenagers')) filters.age_group = 'teenager';
@@ -63,20 +81,8 @@ export class ProfilesService {
         .slice(fromIndex + 1)
         .join(' ')
         .toLowerCase();
-      const countryMapReverse: Record<string, string> = {
-        nigeria: 'NG',
-        kenya: 'KE',
-        angola: 'AO',
-        uganda: 'UG',
-        tanzania: 'TZ',
-        'south africa': 'ZA',
-        ethiopia: 'ET',
-        ghana: 'GH',
-        senegal: 'SN',
-        mali: 'ML',
-        // Add more as needed based on seeded data
-      };
-      const id = countryMapReverse[countryName];
+      const countryMapReverse = await this.getCountryMapReverse();
+      const id = countryMapReverse.get(countryName);
       if (id) filters.country_id = id;
     }
 
@@ -257,7 +263,7 @@ export class ProfilesService {
   }
 
   async searchProfiles(q: string, page?: number, limit?: number) {
-    const filters = this.parseQuery(q);
+    const filters = await this.parseQuery(q);
     if (Object.keys(filters).length === 0) {
       throw new HttpException(
         { status: 'error', message: 'Unable to interpret query' },
