@@ -19,6 +19,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
         : HttpStatus.INTERNAL_SERVER_ERROR;
 
     let message: string | string[];
+    const isProduction = process.env.NODE_ENV === 'production';
 
     if (exception instanceof HttpException) {
       const response = exception.getResponse();
@@ -41,7 +42,22 @@ export class AllExceptionsFilter implements ExceptionFilter {
         message = exception.message;
       }
     } else {
-      message = 'Internal server error';
+      if (exception instanceof Error) {
+        const oauthPayload = (
+          exception as Error & { oauthError?: { data?: unknown } }
+        ).oauthError?.data;
+        const oauthDetails =
+          typeof oauthPayload === 'string' ? ` (${oauthPayload})` : '';
+
+        message = isProduction
+          ? 'Internal server error'
+          : `${exception.message}${oauthDetails}`;
+
+        console.error('[AllExceptionsFilter]', exception.stack ?? exception);
+      } else {
+        message = 'Internal server error';
+        console.error('[AllExceptionsFilter] Non-error exception:', exception);
+      }
     }
 
     response.status(status).json({

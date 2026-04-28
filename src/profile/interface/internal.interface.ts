@@ -16,3 +16,10 @@ export interface SeedProfile {
 export interface SeedResponse {
   profiles: SeedProfile[];
 }
+
+export interface GitHubProfile {
+  id: string;
+  username: string;
+  emails?: { value: string }[];
+  photos?: { value: string }[];
+}
