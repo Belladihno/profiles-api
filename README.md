@@ -154,6 +154,11 @@ Required:
 - `JWT_SECRET`
 - `SESSION_SECRET` (recommended)
 
+Optional:
+- `TRUST_PROXY` (for deployments behind a reverse proxy/load balancer)
+  - `true`/`false`, numeric hop count (for example `1`), or a proxy subnet list/value supported by Express
+  - defaults to `1` in production and `false` in non-production
+
 ## Local Run
 
 ```bash

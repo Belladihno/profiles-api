@@ -35,8 +35,35 @@ function getUserIdFromAuthHeader(req: Request): string | undefined {
   }
 }
 
+function resolveTrustProxy(): boolean | number | string {
+  const trustProxy = process.env.TRUST_PROXY?.trim();
+
+  if (!trustProxy) {
+    return process.env.NODE_ENV === 'production' ? 1 : false;
+  }
+
+  if (trustProxy === 'true') {
+    return true;
+  }
+
+  if (trustProxy === 'false') {
+    return false;
+  }
+
+  const asNumber = Number(trustProxy);
+  if (Number.isInteger(asNumber) && asNumber >= 0) {
+    return asNumber;
+  }
+
+  return trustProxy;
+}
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const expressApp = app.getHttpAdapter().getInstance() as {
+    set: (setting: string, value: boolean | number | string) => void;
+  };
+  expressApp.set('trust proxy', resolveTrustProxy());
 
   app.enableVersioning({
     type: VersioningType.HEADER,
