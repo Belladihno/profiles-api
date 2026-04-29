@@ -5,8 +5,15 @@ import { ValidationExceptionFilter } from './filters/validation-exeception.filte
 import { AllExceptionsFilter } from './filters/all-execptions.filter';
 import cookieParser from 'cookie-parser';
 import session from 'express-session';
+import csurf from 'csurf';
 import { ipKeyGenerator, rateLimit } from 'express-rate-limit';
-import type { NextFunction, Request, Response } from 'express';
+import type {
+  NextFunction,
+  Request,
+  Response,
+  Express,
+  RequestHandler,
+} from 'express';
 import { VersioningType } from '@nestjs/common';
 
 function getUserIdFromAuthHeader(req: Request): string | undefined {
@@ -60,9 +67,7 @@ function resolveTrustProxy(): boolean | number | string {
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  const expressApp = app.getHttpAdapter().getInstance() as {
-    set: (setting: string, value: boolean | number | string) => void;
-  };
+  const expressApp = app.getHttpAdapter().getInstance() as Express;
   expressApp.set('trust proxy', resolveTrustProxy());
 
   app.enableVersioning({
@@ -129,6 +134,39 @@ async function bootstrap() {
       }
 
       next();
+    },
+  );
+
+  // CSRF protection for stateful browser requests (uses session).
+  const csrfMiddleware = (
+    csurf as (options?: { cookie?: boolean }) => RequestHandler
+  )({ cookie: false });
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    // Skip CSRF for auth endpoints and safe methods
+    if (
+      req.path.startsWith('/auth') ||
+      req.method === 'GET' ||
+      req.method === 'HEAD' ||
+      req.method === 'OPTIONS' ||
+      req.path === '/csrf-token'
+    ) {
+      return next();
+    }
+
+    if (typeof csrfMiddleware === 'function') {
+      return csrfMiddleware(req, res, next);
+    }
+
+    return next();
+  });
+
+  // Expose a simple endpoint to retrieve CSRF token for browser clients
+  expressApp.get(
+    '/csrf-token',
+    (req: Request & { csrfToken?: () => string }, res: Response) => {
+      const token =
+        typeof req.csrfToken === 'function' ? req.csrfToken() : null;
+      return res.json({ status: 'success', csrfToken: token });
     },
   );
 

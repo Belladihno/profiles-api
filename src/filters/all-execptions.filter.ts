@@ -13,6 +13,19 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
 
+    // Handle CSRF errors thrown by csurf (code === 'EBADCSRFTOKEN')
+    if (
+      exception &&
+      typeof exception === 'object' &&
+      'code' in exception &&
+      (exception as { code: string }).code === 'EBADCSRFTOKEN'
+    ) {
+      return response.status(HttpStatus.FORBIDDEN).json({
+        status: 'error',
+        message: 'Invalid CSRF token',
+      });
+    }
+
     const status =
       exception instanceof HttpException
         ? exception.getStatus()
